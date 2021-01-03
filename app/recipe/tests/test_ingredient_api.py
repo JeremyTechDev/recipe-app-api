@@ -3,8 +3,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from rest_framework.test import APIClient
-
-from core.models import Ingredient
+from core.models import Ingredient, Recipe
 from recipe.serializers import IngredientSerializer
 
 
@@ -82,3 +81,34 @@ class TestIngredientPrivateAPI(TestCase):
         res = self.client.post(INGREDIENT_URL, payload)
 
         self.assertEqual(res.status_code, 400)
+
+    def test_retrieve_assigned_ingredients(self):
+        """Tests retrieving ingredients assigned to recipes"""
+        ingredient1 = Ingredient.objects.create(user=self.user, name='Turkey')
+        ingredient2 = Ingredient.objects.create(user=self.user, name='Steak')
+        recipe = Recipe.objects.create(
+            user=self.user, title='Sample', time_minutes=15, cost=5.00)
+        recipe.ingredients.add(ingredient1)
+
+        res = self.client.get(INGREDIENT_URL, {'assigned_only': 1})
+
+        serializer1 = IngredientSerializer(ingredient1)
+        serializer2 = IngredientSerializer(ingredient2)
+
+        self.assertIn(serializer1.data, res.data)
+        self.assertNotIn(serializer2.data, res.data)
+
+    def test_unique_ingredients_retrieve(self):
+        """Tests filtering assigned only ingredients (unique)"""
+        ingredient1 = Ingredient.objects.create(user=self.user, name='Lunch')
+        Ingredient.objects.create(user=self.user, name='Steak')
+        recipe1 = Recipe.objects.create(
+            user=self.user, title='Sample', time_minutes=15, cost=5.00)
+        recipe1.ingredients.add(ingredient1)
+        recipe2 = Recipe.objects.create(
+            user=self.user, title='Sample2', time_minutes=10, cost=7.00)
+        recipe2.ingredients.add(ingredient1)
+
+        res = self.client.get(INGREDIENT_URL, {'assigned_only': 1})
+
+        self.assertEqual(len(res.data), 1)
